@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Médico</title>
+<link rel="stylesheet" href="/css/medico.css">
+  <link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" onclick="alternarTema()" type="button">🌙</button>
+
+<div class="container">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+    <h2 style="margin:0; color:#1a365d;">🩺 Painel Médico</h2>
+    <button onclick="window.open('tv.html','_blank')" style="background:#3182ce; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer;">📺 Abrir Tela da TV</button>
+  </div>
+
+  <div class="consultorio-box">
+    <label for="consultorio-num"><strong>Meu Consultório:</strong></label>
+    <input type="text" id="consultorio-num" value="01">
+    <span style="color:#4a5568; font-size:13px;">Número enviado para a TV ao chamar.</span>
+  </div>
+
+  <div class="medico-grid">
+    <div class="coluna-fila">
+      <h3 style="margin-top:0; color:#2d3748;">Fila de Espera</h3>
+      <div class="emergencia-card">
+        <strong>🚨 Paciente de Emergência</strong>
+        <p style="font-size:12px; margin-top:4px;">Paciente sem cadastro prévio. Use para atendimento imediato/testes.</p>
+        <button type="button" onclick="selecionarPacienteEmergencia()">Selecionar Paciente de Emergência</button>
+      </div>
+      <div id="triagens"><p style="color:#888; text-align:center;">Carregando...</p></div>
+      <button onclick="carregar()" style="margin-top:10px; width:100%; background:#6c757d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer;">🔄 Atualizar Fila</button>
+    </div>
+
+    <div class="coluna-form">
+      <h3 style="margin-top:0; color:#2d3748; margin-bottom:15px;">Atendimento Médico</h3>
+      <div id="alertaAlergia" class="alerta-alergia"></div>
+      <div id="historicoPaciente" style="display:none;margin-bottom:12px;padding:12px;border-radius:8px;background:#eef6ff;border:1px solid #bfd7f5;"></div>
+
+      <div class="form-group">
+        <label>Paciente Selecionado *</label>
+        <input id="paciente" placeholder="Selecione um paciente na lista" readonly style="background-color: #edf2f7; font-weight: bold;">
+      </div>
+
+      <div class="form-group">
+        <label>Diagnóstico / Hipótese Diagnóstica *</label>
+        <input id="diagnostico" placeholder="Informe o diagnóstico">
+      </div>
+
+      <div class="form-group">
+        <label>Prescrição / Medicação *</label>
+        <select id="medicacao">
+          <option value="">Selecione a medicação</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Observações / Recomendações Médicas</label>
+        <textarea id="obs" rows="4" placeholder="Anotações da consulta ou recomendações de alta..."></textarea>
+      </div>
+
+      <div class="botoes-acao">
+        <button class="btn-pdf" onclick="gerarPDFAlta()">📄 Gerar Alta (PDF)</button>
+        <button class="btn-salvar" onclick="salvar()">Finalizar Consulta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+let triagensCarregadas = [];
+let pacienteSelecionado = null;
+let carregandoFila = false;
+const $ = id => document.getElementById(id);
+const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function requisicaoJSON(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.erro || data.error || `Erro HTTP ${response.status}`);
+  return data;
+}
+
+async function carregar() {
+  if (carregandoFila) return;
+  carregandoFila = true;
+  const div = $("triagens");
+  try {
+    const data = await requisicaoJSON("/triagens");
+    if (!Array.isArray(data)) throw new Error("Formato de fila inválido.");
+    const peso = { vermelho: 1, amarelo: 2, verde: 3 };
+    triagensCarregadas = data.filter(t => t.status === "aguardando_medico" || !t.status)
+      .sort((a,b) => (peso[a.risco] || 4) - (peso[b.risco] || 4));
+    div.replaceChildren();
+    if (!triagensCarregadas.length) {
+      div.innerHTML = "<p style='color:#888;text-align:center;padding:20px 0'>Nenhum paciente na fila de espera.</p>";
+      return;
+    }
+    triagensCarregadas.forEach((t, index) => {
+      const card = document.createElement("div");
+      const selecionado = pacienteSelecionado && String(pacienteSelecionado.id ?? "") === String(t.id ?? "");
+      const risco = ["vermelho", "amarelo", "verde"].includes(t.risco) ? t.risco : "verde";
+      card.className = `card-paciente ${selecionado ? "selecionado" : ""}`;
+      card.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><strong>${escapeHTML(t.nome || "Paciente sem nome")}</strong><span class="badge-risco ${risco}">${escapeHTML(risco)}</span></div>
+        <p style="font-size:12px;margin:4px 0;color:#4a5568"><b>Sintoma:</b> ${escapeHTML(t.sintoma || "Não informado")}</p>
+        <p style="font-size:12px;margin:4px 0;color:#4a5568"><b>Temp:</b> ${t.temperatura ? escapeHTML(t.temperatura) + "°C" : "—"} | <b>Alergia:</b> ${escapeHTML(t.alergia || "Nenhuma")}</p>
+        <div class="botoes-card"><button type="button" class="btn-tv" data-action="chamar" data-index="${index}">📺 Chamar na TV</button><button type="button" class="btn-atender" data-action="selecionar" data-index="${index}">Apenas Selecionar</button></div>`;
+      div.appendChild(card);
+    });
+  } catch (error) {
+    div.innerHTML = `<p role="alert" style="color:#c53030;text-align:center">Não foi possível carregar a fila. ${escapeHTML(error.message)}</p>`;
+  } finally { carregandoFila = false; }
+}
+
+$("triagens").addEventListener("click", async event => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  const triagem = triagensCarregadas[index];
+  if (!triagem) return;
+  selecionar(index);
+  if (button.dataset.action === "chamar") {
+    button.disabled = true;
+    try {
+      await requisicaoJSON("/tv/chamar", { method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({localTipo:"CONSULTÓRIO", localNumero:$("consultorio-num").value.trim() || "01", paciente:triagem.nome || "Paciente sem nome"}) });
+      alert("Paciente chamado na TV.");
+    } catch (error) { alert(`Não foi possível chamar na TV: ${error.message}`); }
+    finally { button.disabled = false; }
+  }
+});
+
+function selecionarPacienteEmergencia() {
+  pacienteSelecionado = { id:null, pacienteId:null, nome:"Paciente de Emergência", sintoma:"", temperatura:"", alergia:"" };
+  $("paciente").value = pacienteSelecionado.nome;
+  $("diagnostico").value = ""; $("medicacao").value = ""; $("obs").value = "";
+  $("alertaAlergia").style.display = "none"; $("historicoPaciente").style.display = "none";
+  carregar();
+  requisicaoJSON("/tv/chamar", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({localTipo:"CONSULTÓRIO",localNumero:$("consultorio-num").value.trim() || "01",paciente:pacienteSelecionado.nome})})
+    .catch(error => alert(`Paciente selecionado, mas não foi possível chamar na TV: ${error.message}`));
+}
+
+function selecionar(index) {
+  const t = triagensCarregadas[index];
+  if (!t) return;
+  pacienteSelecionado = t;
+  $("paciente").value = t.nome || "";
+  $("diagnostico").value = ""; $("medicacao").value = "";
+  $("obs").value = t.observacao ? `[Triagem]: ${t.observacao}\n` : "";
+  const alergia = String(t.alergia || "").trim();
+  const alerta = $("alertaAlergia");
+  if (alergia && !["nenhuma", "não", "nao"].includes(alergia.toLocaleLowerCase("pt-BR"))) {
+    alerta.style.display = "block"; alerta.innerHTML = `<strong>⚠️ ALERTA DE ALERGIA:</strong> ${escapeHTML(alergia)}`;
+  } else { alerta.style.display = "none"; alerta.textContent = ""; }
+  carregarHistoricoPaciente(t.pacienteId);
+  carregar();
+}
+
+async function carregarHistoricoPaciente(pacienteId) {
+  const box = $("historicoPaciente");
+  if (!pacienteId) { box.style.display = "none"; box.textContent = ""; return; }
+  try {
+    const data = await requisicaoJSON(`/pacientes/${encodeURIComponent(pacienteId)}/historico`);
+    const consultas = Array.isArray(data.consultas) ? data.consultas : [];
+    box.style.display = "block";
+    box.innerHTML = `<b>📋 Histórico do paciente</b><br><span style="font-size:12px;color:#4a5568">${consultas.length ? consultas.map(c => `${c.createdAt && !Number.isNaN(new Date(c.createdAt).getTime()) ? new Date(c.createdAt).toLocaleDateString("pt-BR") : "Data não informada"} — ${escapeHTML(c.medicoNome || "Médico")} — ${escapeHTML(c.diagnostico || "Sem diagnóstico")} — ${escapeHTML(c.medicacao || "Sem medicação")}`).join("<br>") : "Nenhuma consulta anterior registrada."}</span>`;
+  } catch (error) { box.style.display = "block"; box.textContent = "Não foi possível carregar o histórico deste paciente."; }
+}
+
+async function carregarMedicacoes() {
+  const select = $("medicacao");
+  try {
+    const data = await requisicaoJSON("/farmacia/estoque");
+    if (!Array.isArray(data)) throw new Error("Estoque inválido.");
+    select.replaceChildren(new Option("Selecione a medicação", ""));
+    data.filter(m => Number(m.quantidade) > 0).forEach(m => {
+      const option = new Option(`${m.nome} (${m.quantidade} em estoque)${Number(m.quantidade) <= Number(m.minimo) ? " ⚠️ baixo" : ""}`, m.nome);
+      select.add(option);
+    });
+    if (select.options.length === 1) select.add(new Option("Nenhuma medicação disponível", ""));
+  } catch (error) { select.replaceChildren(new Option("Erro ao carregar medicações", "")); console.error("Erro ao carregar estoque:", error); }
+}
+
+async function gerarPDFAlta() {
+  if (!pacienteSelecionado || !$("paciente").value.trim()) { alert("Selecione um paciente da fila ou o paciente de emergência."); return; }
+  const dados = { paciente:$("paciente").value.trim(), sintoma:pacienteSelecionado.sintoma || "", temperatura:pacienteSelecionado.temperatura || "", alergia:pacienteSelecionado.alergia || "", diagnostico:$("diagnostico").value.trim(), medicacao:$("medicacao").value, obs:$("obs").value.trim() };
+  try {
+    const response = await fetch("/gerar-pdf-alta", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(dados)});
+    if (!response.ok) { const erro = await response.json().catch(()=>({})); throw new Error(erro.erro || "Erro ao gerar PDF."); }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "alta-medica.pdf";
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) { alert(`Não foi possível gerar o PDF: ${error.message}`); }
+}
+
+async function salvar() {
+  if (!pacienteSelecionado || !$("paciente").value.trim()) { alert("Selecione um paciente antes de finalizar a consulta."); return; }
+  const diagnostico = $("diagnostico").value.trim(), medicacao = $("medicacao").value;
+  if (!diagnostico) { alert("Informe o diagnóstico."); $("diagnostico").focus(); return; }
+  if (!medicacao) { alert("Selecione uma medicação."); $("medicacao").focus(); return; }
+  const button = document.querySelector(".btn-salvar"); button.disabled = true;
+  try {
+    await requisicaoJSON("/consulta", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({triagemId:pacienteSelecionado.id ?? null,pacienteId:pacienteSelecionado.pacienteId ?? null,paciente:$("paciente").value.trim(),diagnostico,medicacao,obs:$("obs").value.trim(),medicoUsuario:window.sentinelaUser?.usuario,medicoNome:window.sentinelaUser?.nome})});
+    alert("Consulta finalizada com sucesso!"); pacienteSelecionado = null;
+    $("paciente").value = ""; $("diagnostico").value = ""; $("medicacao").value = ""; $("obs").value = "";
+    $("alertaAlergia").style.display = "none"; $("historicoPaciente").style.display = "none";
+    await carregar(); await carregarMedicacoes();
+  } catch (error) { alert(`Não foi possível finalizar a consulta: ${error.message}`); }
+  finally { button.disabled = false; }
+}
+
+carregar();
+carregarMedicacoes();
+setInterval(carregar, 10000);
+</script>
+
+<script src="/js/session.js"></script>
+<script src="/js/theme.js"></script>
+</body>
+</html>
