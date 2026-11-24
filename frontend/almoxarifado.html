@@ -190,6 +190,30 @@
             </div>
         </div>
       </div>
+    </div>
+    
+    <!--Modal: Editar quantidade manualmente-->
+    <div class="modal-overlay" id="modalEditar">
+        <div class="modal-box">
+            <div class="modal-title">✏️ Editar Estoque</div>
+            <div class="form-group">
+                <label id="modalMedNome" style="font-size: 25px; color: var(--dark); margin-bottom: 12px; display: block;"></label>
+                <label>Quantidade a adicionar (negativo para remover):</label>
+                <input type="number" id="ModalQtd" class="form-control" value="10">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-sm btn-secondary" style="padding: 11px" onclick="fecharModal()">Cancelar</button>
+                <button class="btn-sm btn-sucess" style="padding: 11px; flex: 2" onclick="confirmarEdicao()">Confirmar</button>
+            </div>
+        </div>
+    </div>
 
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // ------------------------------
+        // ESTADO GLOBAL
+        // ------------------------------
+    </script>
 </body>
 </html>
