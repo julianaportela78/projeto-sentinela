@@ -155,6 +155,39 @@
                 <button class="btn-sm btn-secondary" 
                 onclick="carregarEstoque()">Atualizar</button>
             </div>
+            <div class="card-body">
+                <div class="search-bar">
+                    <input type="text" class="search-input"
+                    id="buscarMed" placeholder="🔍 Buscar medicamento..."
+                    oninput="filtrarTabela()">
+                </div>
+                <div class="filter-chips" id="filterChips">
+                    <span class="chip active" onclick="setFiltro('todos', this)">Todos</span>
+                </div>
+                <div style="overflow-x: auto">
+                    <table class="estoque-table">
+                        <thead>
+                            <tr>
+                                <th>Medicamento</th>
+                                <th>Categoria</th>
+                                <th>Disponível</th>
+                                <th>Unidade</th>
+                                <th style="text-align: right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaEstoque">
+                            <tr>
+                                <td colspan="5">
+                                    <div class="empty-state">
+                                        <div class="empty-icon">⌛</div>
+                                        <p>Carregando...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
       </div>
 
